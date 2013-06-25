@@ -206,6 +206,18 @@ class CachingQuerySet(models.query.QuerySet):
         else:
             return cached_with(self, super_count, query_string, TIMEOUT)
 
+    def aggregate(self, *args, **kwargs):
+        super_aggregate = super(CachingQuerySet, self).aggregate
+
+        query = self.query.clone()
+        for (alias, aggregate_expr) in kwargs.items():
+            query.add_aggregate(aggregate_expr, self.model, alias,
+                                is_summary=True)
+
+        query_string = 'aggregate:%s' % query
+        value = cached_with(self, super_aggregate, query_string, TIMEOUT, *args, **kwargs)
+        return value
+
     def cache(self, timeout=None):
         qs = self._clone()
         qs.timeout = timeout
@@ -274,20 +286,20 @@ def _function_cache_key(key):
     return make_key('f:%s' % key, with_locale=True)
 
 
-def cached(function, key_, duration=None):
+def cached(function, key_, duration=None, *args, **kwargs):
     """Only calls the function if ``key`` is not already in the cache."""
     key = _function_cache_key(key_)
     val = cache.get(key)
     if val is None:
         log.debug('cache miss for %s' % key)
-        val = function()
+        val = function(*args, **kwargs)
         cache.set(key, val, duration)
     else:
         log.debug('cache hit for %s' % key)
     return val
 
 
-def cached_with(obj, f, f_key, timeout=None):
+def cached_with(obj, f, f_key, timeout=None, *args, **kwargs):
     """Helper for caching a function call within an object's flush list."""
     try:
         obj_key = (obj.query_key() if hasattr(obj, 'query_key')
@@ -300,7 +312,7 @@ def cached_with(obj, f, f_key, timeout=None):
     # Put the key generated in cached() into this object's flush list.
     invalidator.add_to_flush_list(
         {obj.flush_key(): [_function_cache_key(key)]})
-    return cached(f, key, timeout)
+    return cached(f, key, timeout, *args, **kwargs)
 
 
 class cached_method(object):
