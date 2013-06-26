@@ -4,7 +4,7 @@ import caching
 
 
 setup(
-    name='django-cache-machine',
+    name='django-cache-zoom',
     version=caching.__version__,
     description='Automatic caching and invalidation for Django models '
                 'through the ORM.',
